@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { ApiProvider, useApiContextHook } from "../hooks/useDashboardData";
 import Dialog from "./Dialog";
 import {
   Users,
@@ -24,114 +25,53 @@ import {
   Line,
 } from "recharts";
 
- // eslint-disable-next-line no-unused-vars
- const StatCard = ({ icon: Icon, title, value, color, iconBg }) => (
-   <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
-     <div className="flex items-center justify-between">
-       <div>
-         <p className="text-gray-600 text-sm font-medium mb-1">{title}</p>
-         <p className="text-3xl font-bold text-gray-900">{value}</p>
-       </div>
-       <div className={`${iconBg} p-4 rounded-xl`}>
-         <Icon size={32} className={color} />
-       </div>
-     </div>
-   </div>
- );
+// eslint-disable-next-line no-unused-vars
+const StatCard = ({ icon: Icon, title, value, color, iconBg }) => (
+  <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition-shadow">
+    <div className="flex items-center justify-between">
+      <div>
+        <p className="text-gray-600 text-sm font-medium mb-1">{title}</p>
+        <p className="text-3xl font-bold text-gray-900">{value}</p>
+      </div>
+      <div className={`${iconBg} p-4 rounded-xl`}>
+        <Icon size={32} className={color} />
+      </div>
+    </div>
+  </div>
+);
 
 const AdminDashboard = () => {
-  const [users] = useState([
-    { id: 1, name: "Alice Johnson", balance: 5000 },
-    { id: 2, name: "Bob Smith", balance: 3200 },
-    { id: 3, name: "Carol Davis", balance: 7500 },
-    { id: 4, name: "David Wilson", balance: 4800 },
-  ]);
-
-  const [transactions] = useState([
-    {
-      id: 1,
-      type: "Deposit",
-      status: "Completed",
-      amount: 1000,
-      userId: 1,
-      userName: "Alice Johnson",
-      timestamp: new Date("2024-11-20T10:30:00"),
-    },
-    {
-      id: 2,
-      type: "Transfer",
-      status: "Completed",
-      amount: 500,
-      fromUserId: 2,
-      fromUserName: "Bob Smith",
-      toUserId: 1,
-      toUserName: "Alice Johnson",
-      timestamp: new Date("2024-11-20T11:15:00"),
-    },
-    {
-      id: 3,
-      type: "Withdrawal",
-      status: "Completed",
-      amount: 300,
-      userId: 3,
-      userName: "Carol Davis",
-      timestamp: new Date("2024-11-20T12:00:00"),
-    },
-    {
-      id: 4,
-      type: "Deposit",
-      status: "Completed",
-      amount: 2000,
-      userId: 4,
-      userName: "David Wilson",
-      timestamp: new Date("2024-11-20T13:20:00"),
-    },
-    {
-      id: 5,
-      type: "Transfer",
-      status: "Completed",
-      amount: 750,
-      fromUserId: 1,
-      fromUserName: "Alice Johnson",
-      toUserId: 3,
-      toUserName: "Carol Davis",
-      timestamp: new Date("2024-11-20T14:45:00"),
-    },
-    {
-      id: 6,
-      type: "Withdrawal",
-      status: "Completed",
-      amount: 450,
-      userId: 2,
-      userName: "Bob Smith",
-      timestamp: new Date("2024-11-20T15:10:00"),
-    },
-    {
-      id: 7,
-      type: "Deposit",
-      status: "Completed",
-      amount: 1500,
-      userId: 1,
-      userName: "Alice Johnson",
-      timestamp: new Date("2024-11-19T09:30:00"),
-    },
-    {
-      id: 8,
-      type: "Transfer",
-      status: "Completed",
-      amount: 300,
-      fromUserId: 4,
-      fromUserName: "David Wilson",
-      toUserId: 2,
-      toUserName: "Bob Smith",
-      timestamp: new Date("2024-11-19T10:15:00"),
-    },
-  ]);
+  const { fetchAllTransactions, fetchStats, totalStats, allTransactions } =
+    useApiContextHook();
 
   const [page, setPage] = useState(0);
   const [rowsPerPage] = useState(10);
   const [filterType, setFilterType] = useState("All");
   const [filterUser, setFilterUser] = useState("All");
+
+  const transactions = useMemo(() => {
+    if (!allTransactions) return [];
+
+    return allTransactions.map(t => ({
+      id: t.id,
+      type: t.type,
+      status: t.status,
+      amount: Number(t.amount),
+
+      // Match your UI’s expected structure
+      userName:
+        t.type === "Deposit"
+          ? t.toUser
+          : t.type === "Withdrawal"
+          ? t.fromUser
+          : null,
+
+      fromUserName: t.fromUser,
+      toUserName: t.toUser,
+
+      timestamp: new Date(t.timestamp),
+    }));
+  }, [allTransactions]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
@@ -145,29 +85,45 @@ const AdminDashboard = () => {
     });
   }, [transactions, filterType, filterUser]);
 
-  const stats = useMemo(() => {
-    const totalBalance = users.reduce((sum, u) => sum + u.balance, 0);
-    const totalTransfers = transactions.filter(
-      t => t.type === "Transfer"
-    ).length;
-    const totalWithdrawals = transactions.filter(
-      t => t.type === "Withdrawal"
-    ).length;
-    const totalDeposits = transactions.filter(t => t.type === "Deposit").length;
-    const totalTransactionValue = transactions.reduce(
-      (sum, t) => sum + t.amount,
-      0
-    );
+  const users = useMemo(() => {
+    if (!allTransactions) return [];
 
-    return {
-      totalUsers: users.length,
-      totalBalance,
-      totalTransfers,
-      totalWithdrawals,
-      totalDeposits,
-      totalTransactionValue,
-    };
-  }, [users, transactions]);
+    const balances = {};
+
+    allTransactions.forEach(t => {
+      const amount = Number(t.amount);
+
+      switch (t.type) {
+        case "Deposit":
+          if (t.toUser) {
+            balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+          }
+          break;
+
+        case "Withdrawal":
+          if (t.fromUser) {
+            balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+          }
+          break;
+
+        case "Transfer":
+          if (t.fromUser) {
+            balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+          }
+          if (t.toUser) {
+            balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+          }
+          break;
+      }
+    });
+
+    // Convert to array of user objects
+    return Object.entries(balances).map(([name, balance], index) => ({
+      id: index + 1,
+      name,
+      balance,
+    }));
+  }, [allTransactions]);
 
   const chartData = useMemo(() => {
     const typeData = [
@@ -216,8 +172,10 @@ const AdminDashboard = () => {
     return { typeData, activityData, userBalanceData };
   }, [transactions, users]);
 
-  // eslint-disable-next-line no-unused-vars
- 
+  useEffect(() => {
+    fetchStats();
+    fetchAllTransactions();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -242,28 +200,28 @@ const AdminDashboard = () => {
           <StatCard
             icon={Users}
             title="Total Users"
-            value={stats.totalUsers}
+            value={totalStats?.totalUsers ?? 0}
             color="text-blue-600"
             iconBg="bg-blue-50"
           />
           <StatCard
             icon={Wallet}
             title="Total in Wallets"
-            value={`$${stats.totalBalance.toLocaleString()}`}
+            value={`$${totalStats?.totalValueInWallets?.toLocaleString()}`}
             color="text-green-600"
             iconBg="bg-green-50"
           />
           <StatCard
             icon={ArrowLeftRight}
             title="Total Transfers"
-            value={stats.totalTransfers}
+            value={totalStats?.totalTransfers || 0}
             color="text-indigo-600"
             iconBg="bg-indigo-50"
           />
           <StatCard
             icon={TrendingDown}
             title="Total Withdrawals"
-            value={stats.totalWithdrawals}
+            value={totalStats?.totalWithdrawals || 0}
             color="text-orange-600"
             iconBg="bg-orange-50"
           />
@@ -513,7 +471,7 @@ const AdminDashboard = () => {
             Recent Activity Feed
           </h2>
           <div className="space-y-3">
-            {transactions.slice(0, 10).map((t) => (
+            {transactions.slice(0, 10).map(t => (
               <div
                 key={t.id}
                 className="flex justify-between items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
