@@ -221,7 +221,7 @@ const AdminDashboard = () => {
           <StatCard
             icon={TrendingDown}
             title="Total Withdrawals"
-            value={totalStats.totalWithdrawals || 0}
+            value={totalStats?.totalWithdrawals || 0}
             color="text-orange-600"
             iconBg="bg-orange-50"
           />
