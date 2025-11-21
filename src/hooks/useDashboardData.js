@@ -76,6 +76,15 @@ export const getTransactions = async userId => {
   }
 };
 
+export const getAllUsers = async () => {
+  try {
+    const response = await api.get("/users");
+    return response.data;
+  } catch (error) {
+    throw error.response?.data?.error || "Failed to fetch stats";
+  }
+};
+
 // Admin endpoints (from earlier addition)
 export const getSystemStats = async () => {
   try {
@@ -103,67 +112,8 @@ const useDashboardData = () => {
   const [allTransactions, setAllTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
 
-  const handleCreateUser = async data => {
-    setLoading(true);
-    setError(null);
-    try {
-      const { user } = await createUser(data);
-      setSelectedUserId(user.id);
-      await fetchBalance(user.id);
-      return user;
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeposit = async (userId, amount) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await deposit(userId, amount);
-      await fetchBalance(userId);
-      await fetchTransactions(userId);
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTransfer = async (fromUserId, toUserId, amount) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await transfer(fromUserId, toUserId, amount);
-      await fetchBalance(fromUserId);
-      await fetchTransactions(fromUserId);
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleWithdraw = async (userId, amount) => {
-    setLoading(true);
-    setError(null);
-    try {
-      await withdraw(userId, amount);
-      await fetchBalance(userId);
-      await fetchTransactions(userId);
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const fetchBalance = async userId => {
     try {
@@ -192,6 +142,15 @@ const useDashboardData = () => {
     }
   };
 
+   const fetchAllUsers = async () => {
+     try {
+       const data = await getAllUsers();
+       setAllUsers(data);
+     } catch (err) {
+       setError(err);
+     }
+   };
+
   const fetchAllTransactions = async () => {
     try {
       const txs = await getAllTransactions();
@@ -210,11 +169,10 @@ const useDashboardData = () => {
     allTransactions,
     loading,
     error,
+    allUsers,
+    fetchAllUsers,
+    // setLoading,
     setError,
-    handleCreateUser,
-    handleDeposit,
-    handleTransfer,
-    handleWithdraw,
     fetchBalance,
     fetchTransactions,
     fetchStats,
