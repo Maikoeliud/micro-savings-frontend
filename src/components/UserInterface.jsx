@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 // import Dialog from "./Dialog";
 import {
   Wallet,
@@ -8,209 +8,265 @@ import {
   Plus,
   X,
 } from "lucide-react";
-  const Dialog = ({ isOpen, onClose, title, children }) => {
-    if (!isOpen) return null;
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold">{title}</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <X size={24} />
-            </button>
-          </div>
-          {children}
+import {
+  createUser,
+  deposit,
+  transfer,
+  useApiContextHook,
+  withdraw,
+} from "../hooks/useDashboardData";
+const Dialog = ({ isOpen, onClose, title, children }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={24} />
+          </button>
         </div>
+        {children}
       </div>
-    );
-  };
+    </div>
+  );
+};
 const UserInterface = () => {
-  const [users, setUsers] = useState([
-    { id: 1, name: "Alice Johnson", balance: 5000 },
-    { id: 2, name: "Bob Smith", balance: 3200 },
-    { id: 3, name: "Carol Davis", balance: 7500 },
-  ]);
-  const [selectedUser, setSelectedUser] = useState(1);
-  const [transactions, setTransactions] = useState([
-    {
-      id: 1,
-      type: "Deposit",
-      status: "Completed",
-      amount: 1000,
-      userId: 1,
-      userName: "Alice Johnson",
-      timestamp: new Date("2024-11-20T10:30:00"),
-    },
-    {
-      id: 2,
-      type: "Transfer",
-      status: "Completed",
-      amount: 500,
-      fromUserId: 2,
-      fromUserName: "Bob Smith",
-      toUserId: 1,
-      toUserName: "Alice Johnson",
-      timestamp: new Date("2024-11-20T11:15:00"),
-    },
-    {
-      id: 3,
-      type: "Withdrawal",
-      status: "Completed",
-      amount: 300,
-      userId: 3,
-      userName: "Carol Davis",
-      timestamp: new Date("2024-11-20T12:00:00"),
-    },
-  ]);
+  const { fetchAllTransactions, fetchStats, fetchAllUsers, allTransactions, allUsers } =
+    useApiContextHook();
+
+  // const users = useMemo(() => {
+  //   if (!allTransactions) return [];
+
+  //   const balances = {};
+
+  //   allTransactions.forEach(t => {
+  //     const amount = Number(t.amount);
+
+  //     switch (t.type) {
+  //       case "Deposit":
+  //         if (t.toUser) balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+  //         break;
+
+  //       case "Withdrawal":
+  //         if (t.fromUser)
+  //           balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+  //         break;
+
+  //       case "Transfer":
+  //         if (t.fromUser)
+  //           balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+  //         if (t.toUser) balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+  //         break;
+  //     }
+  //   });
+
+  //   return Object.entries(balances).map(([name, balance], index) => ({
+  //     id: index + 1,
+  //     name,
+  //     balance,
+  //   }));
+  // }, [allTransactions]);
+
+  
+
+  const users = useMemo(() => {
+    if (!allUsers || !allTransactions) return [];
+
+    // Step 1: Compute balances from transactions
+    const balances = {};
+
+    allTransactions.forEach(t => {
+      const amount = Number(t.amount);
+
+      switch (t.type) {
+        case "Deposit":
+          if (t.toUser) balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+          break;
+
+        case "Withdrawal":
+          if (t.fromUser)
+            balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+          break;
+
+        case "Transfer":
+          if (t.fromUser)
+            balances[t.fromUser] = (balances[t.fromUser] || 0) - amount;
+          if (t.toUser) balances[t.toUser] = (balances[t.toUser] || 0) + amount;
+          break;
+      }
+    });
+
+    // Step 2: Merge backend users + computed balances
+    return allUsers.map(u => ({
+      id: u.id, // REAL backend user ID
+      name: u.name,
+      email: u.email,
+      balance: Number(balances[u.name] || 0), // computed balance
+      accountId: u.Account?.id,
+    }));
+  }, [allUsers, allTransactions]);
+
+  const [selectedUser, setSelectedUser] = useState();
+
+  const transaction = useMemo(() => {
+    if (!allTransactions) return [];
+
+    return allTransactions.map(t => ({
+      id: t.id,
+      type: t.type,
+      status: t.status,
+      amount: Number(t.amount),
+
+      // Match your UI’s expected structure
+      userName:
+        t.type === "Deposit"
+          ? t.toUser
+          : t.type === "Withdrawal"
+          ? t.fromUser
+          : null,
+
+      fromUserName: t.fromUser,
+      toUserName: t.toUser,
+
+      timestamp: new Date(t.timestamp),
+    }));
+  }, [allTransactions]);
+  const [transactions, setTransactions] = useState(transaction);
 
   const [openDialog, setOpenDialog] = useState(null);
   const [amount, setAmount] = useState("");
   const [toUser, setToUser] = useState("");
+
   const [newUserName, setNewUserName] = useState("");
+  const [newUserEmail, setNewUserEmail] = useState("");
+
   const [notification, setNotification] = useState(null);
+
+  // const [loading, setLoading] = useState(false);
+  // const [error, setError] = useState(null);
 
   const showNotification = (message, type = "success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleDeposit = () => {
+  const handleDepositUI = async () => {
     const depositAmount = parseFloat(amount);
-    if (depositAmount > 0) {
-      const user = users.find(u => u.id === selectedUser);
-      setUsers(
-        users.map(u =>
-          u.id === selectedUser
-            ? { ...u, balance: u.balance + depositAmount }
-            : u
-        )
-      );
+    if (!depositAmount || depositAmount <= 0) return;
 
-      const newTransaction = {
-        id: transactions.length + 1,
-        type: "Deposit",
-        status: "Completed",
-        amount: depositAmount,
-        userId: selectedUser,
-        userName: user.name,
-        timestamp: new Date(),
-      };
-      setTransactions([newTransaction, ...transactions]);
+    try {
+      await deposit(selectedUser, depositAmount);
+
+      // Refresh global transaction list
+      await fetchAllTransactions();
 
       setAmount("");
       setOpenDialog(null);
-      showNotification(
-        `✅ Deposited $${depositAmount.toFixed(2)} successfully!`
-      );
+      showNotification(`✅ Deposited $${depositAmount} successfully!`);
+    } catch (err) {
+      showNotification(`❌ ${err}`, "error");
     }
   };
 
-  const handleTransfer = () => {
+  const handleTransferUI = async () => {
     const transferAmount = parseFloat(amount);
-    const fromUser = users.find(u => u.id === selectedUser);
-    const toUserObj = users.find(u => u.id === toUser);
+    if (!transferAmount || transferAmount <= 0) return;
 
-    if (
-      transferAmount > 0 &&
-      fromUser.balance >= transferAmount &&
-      toUser !== selectedUser
-    ) {
-      setUsers(
-        users.map(u => {
-          if (u.id === selectedUser)
-            return { ...u, balance: u.balance - transferAmount };
-          if (u.id === toUser)
-            return { ...u, balance: u.balance + transferAmount };
-          return u;
-        })
-      );
+    const sender = users.find(u => u.id === selectedUser);
+    const receiver = users.find(u => u.id === toUser);
 
-      const newTransaction = {
-        id: transactions.length + 1,
-        type: "Transfer",
-        status: "Completed",
-        amount: transferAmount,
-        fromUserId: selectedUser,
-        fromUserName: fromUser.name,
-        toUserId: toUser,
-        toUserName: toUserObj.name,
-        timestamp: new Date(),
-      };
-      setTransactions([newTransaction, ...transactions]);
+    if (!receiver)
+      return showNotification("❌ Select a valid recipient", "error");
+    if (selectedUser === toUser)
+      return showNotification("❌ Cannot transfer to yourself", "error");
+    if (sender.balance < transferAmount)
+      return showNotification("❌ Insufficient balance", "error");
+
+    try {
+      await transfer(selectedUser, toUser, transferAmount);
+
+      await fetchAllTransactions();
 
       setAmount("");
       setToUser("");
       setOpenDialog(null);
-      showNotification(
-        `✅ Transferred $${transferAmount.toFixed(2)} to ${toUserObj.name}!`
-      );
-    } else if (fromUser.balance < transferAmount) {
-      showNotification("❌ Insufficient balance!", "error");
+      showNotification(`💸 Sent $${transferAmount} to ${receiver.name}`);
+    } catch (err) {
+      showNotification(`❌ ${err}`, "error");
     }
   };
 
-  const handleWithdrawal = () => {
+  const handleWithdrawalUI = async () => {
     const withdrawAmount = parseFloat(amount);
+    if (!withdrawAmount || withdrawAmount <= 0) return;
+
     const user = users.find(u => u.id === selectedUser);
 
-    if (withdrawAmount > 0 && user.balance >= withdrawAmount) {
-      setUsers(
-        users.map(u =>
-          u.id === selectedUser
-            ? { ...u, balance: u.balance - withdrawAmount }
-            : u
-        )
-      );
+    if (user.balance < withdrawAmount) {
+      return showNotification("❌ Insufficient balance", "error");
+    }
 
-      const newTransaction = {
-        id: transactions.length + 1,
-        type: "Withdrawal",
-        status: "Completed",
-        amount: withdrawAmount,
-        userId: selectedUser,
-        userName: user.name,
-        timestamp: new Date(),
-      };
-      setTransactions([newTransaction, ...transactions]);
+    try {
+      await withdraw(selectedUser, withdrawAmount);
+
+      await fetchAllTransactions();
 
       setAmount("");
       setOpenDialog(null);
-      showNotification(
-        `✅ Withdrew $${withdrawAmount.toFixed(2)} successfully!`
-      );
-    } else if (user.balance < withdrawAmount) {
-      showNotification("❌ Insufficient balance!", "error");
+      showNotification(`🏧 Withdrew $${withdrawAmount} successfully!`);
+    } catch (err) {
+      showNotification(`❌ ${err}`, "error");
     }
   };
 
-  const handleCreateUser = () => {
-    if (newUserName.trim()) {
-      const newUser = {
-        id: users.length + 1,
+  const handleCreateUserUI = async () => {
+    if (!newUserName.trim() || !newUserEmail.trim()) {
+      return showNotification("❌ Name and Email are required", "error");
+    }
+
+    try {
+      await createUser({
         name: newUserName,
-        balance: 0,
-      };
-      setUsers([...users, newUser]);
+        email: newUserEmail,
+      });
+
+      await fetchAllTransactions();
+      await fetchStats();
+
       setNewUserName("");
+      setNewUserEmail("");
       setOpenDialog(null);
-      showNotification(`✅ User ${newUserName} created successfully!`);
+
+      showNotification(`👤 User ${newUserName} created successfully!`);
+    } catch (err) {
+      showNotification(`❌ ${err}`, "error");
     }
   };
+
+  useEffect(() => {
+    fetchAllUsers();
+    fetchAllTransactions();
+  }, []);
+
+  // useEffect(() => {
+  //   if (users.length > 0 && !selectedUser) {
+  //     setSelectedUser(users[0].id);
+  //   }
+  // }, [users]);
 
   const currentUser = users.find(u => u.id === selectedUser);
-
+console.log({users, selectedUser, currentUser});
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
       <div className="bg-white shadow-md border-b">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-3">
           <Wallet size={32} className="text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-800">
-            User Dasboard
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-800">User Dasboard</h1>
         </div>
       </div>
 
@@ -249,7 +305,8 @@ const UserInterface = () => {
             </label>
             <select
               value={selectedUser}
-              onChange={e => setSelectedUser(parseInt(e.target.value))}
+              // onChange={e => setSelectedUser(parseInt(e.target.value))}
+              onChange={e => setSelectedUser(e.target.value)}
               className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
             >
               {users.map(user => (
@@ -404,7 +461,7 @@ const UserInterface = () => {
             Cancel
           </button>
           <button
-            onClick={handleDeposit}
+            onClick={handleDepositUI}
             className="px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-md"
           >
             Deposit
@@ -426,7 +483,7 @@ const UserInterface = () => {
         />
         <select
           value={toUser}
-          onChange={e => setToUser(parseInt(e.target.value))}
+          onChange={e => setToUser(e.target.value)}
           className="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 focus:border-blue-500 focus:outline-none"
         >
           <option value="">Select recipient</option>
@@ -446,7 +503,7 @@ const UserInterface = () => {
             Cancel
           </button>
           <button
-            onClick={handleTransfer}
+            onClick={handleTransferUI}
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
           >
             Transfer
@@ -474,7 +531,7 @@ const UserInterface = () => {
             Cancel
           </button>
           <button
-            onClick={handleWithdrawal}
+            onClick={handleWithdrawalUI}
             className="px-5 py-2.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors shadow-md"
           >
             Withdraw
@@ -489,9 +546,16 @@ const UserInterface = () => {
       >
         <input
           type="text"
-          placeholder="Enter user name"
+          placeholder="Name"
           value={newUserName}
           onChange={e => setNewUserName(e.target.value)}
+          className="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 focus:border-blue-500 focus:outline-none"
+        />
+        <input
+          type="email"
+          placeholder="Email"
+          value={newUserEmail}
+          onChange={e => setNewUserEmail(e.target.value)}
           className="w-full p-3 border-2 border-gray-300 rounded-lg mb-4 focus:border-blue-500 focus:outline-none"
         />
         <div className="flex gap-3 justify-end">
@@ -502,7 +566,7 @@ const UserInterface = () => {
             Cancel
           </button>
           <button
-            onClick={handleCreateUser}
+            onClick={handleCreateUserUI}
             className="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md"
           >
             Create User
