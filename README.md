@@ -26,7 +26,10 @@ npm install
 ### Development
 ```bash
 npm run dev
+
 ```
+ create a .env file and paste this
+ 
 Open http://localhost:5173 in your browser.
 
 ### Production Build
