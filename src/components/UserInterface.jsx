@@ -259,7 +259,7 @@ const UserInterface = () => {
   // }, [users]);
 
   const currentUser = users.find(u => u.id === selectedUser);
-console.log({users, selectedUser, currentUser});
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Header */}
