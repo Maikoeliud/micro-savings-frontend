@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import constate from "constate";
 
 const api = axios.create({
-  baseURL: "http://localhost:3000",
+  baseURL: "https://micro-savings-backend.vercel.app",
   headers: { "Content-Type": "application/json" },
 });
 
